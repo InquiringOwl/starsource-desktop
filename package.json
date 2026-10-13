@@ -1,7 +1,7 @@
 {
   "name": "starsource-desktop",
   "productName": "StarSource",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "StarSource: an astrology console that computes natal, transit, progression, return, harmonic and composite charts with the Swiss Ephemeris, to the arcsecond.",
   "author": "Wolfie's Coven <ashley@ashleyhoffmann.com>",
   "license": "AGPL-3.0-or-later",
@@ -36,7 +36,7 @@
   "build": {
     "appId": "com.wolfiescoven.starsource",
     "productName": "StarSource",
-    "copyright": "Copyright \u00a9 2026 Wolfie's Coven. Swiss Ephemeris \u00a9 Astrodienst AG (AGPL-3.0).",
+    "copyright": "Copyright © 2026 Wolfie's Coven. Swiss Ephemeris © Astrodienst AG (AGPL-3.0).",
     "directories": {
       "output": "dist",
       "buildResources": "build"
