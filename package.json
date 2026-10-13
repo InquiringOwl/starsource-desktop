@@ -1,0 +1,109 @@
+{
+  "name": "starsource-desktop",
+  "productName": "StarSource",
+  "version": "0.1.0",
+  "description": "StarSource: an astrology console that computes natal, transit, progression, return, harmonic and composite charts with the Swiss Ephemeris, to the arcsecond.",
+  "author": "Wolfie's Coven <ashley@ashleyhoffmann.com>",
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "build:web": "node tools/build-web.js",
+    "test": "node tests/astro.test.js",
+    "smoke": "node tools/smoke.js",
+    "check": "node tools/build-web.js && node tests/astro.test.js && node tools/smoke.js",
+    "serve": "node tools/serve.js",
+    "start": "node tools/build-web.js && electron .",
+    "dist": "node tools/build-web.js && electron-builder --publish never",
+    "release": "node tools/release.js",
+    "mobile:sync": "node tools/build-web.js && npx cap sync",
+    "android": "node tools/build-web.js && npx cap add android 2>/dev/null; npx cap sync android && npx cap open android",
+    "ios": "node tools/build-web.js && npx cap add ios 2>/dev/null; npx cap sync ios && npx cap open ios"
+  },
+  "dependencies": {
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^44.5.0",
+    "electron-builder": "^26.15.3",
+    "playwright": "^1.56.0",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "build": {
+    "appId": "com.wolfiescoven.starsource",
+    "productName": "StarSource",
+    "copyright": "Copyright \u00a9 2026 Wolfie's Coven. Swiss Ephemeris \u00a9 Astrodienst AG (AGPL-3.0).",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "updater-mac.js",
+      "app/**/*",
+      "package.json",
+      "LICENSE"
+    ],
+    "afterPack": "build/after-pack.js",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "InquiringOwl",
+        "repo": "starsource-desktop",
+        "releaseType": "release"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "identity": null,
+      "hardenedRuntime": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "StarSource-${version}-${arch}-mac.${ext}"
+    },
+    "dmg": {
+      "artifactName": "StarSource-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "StarSource-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Education",
+      "artifactName": "StarSource-${version}.${ext}"
+    }
+  }
+}

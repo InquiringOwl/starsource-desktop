@@ -1,0 +1,122 @@
+# Builds StarSource for macOS, Windows and Linux and publishes a GitHub Release in this repo.
+# Installed copies of StarSource find that release and update themselves.
+# Trigger: push a tag like v0.1.1   (npm run release does this)
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      HAS_MAC_CERT: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: node tools/build-web.js
+      - name: Use Apple signing certificate
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
+        shell: bash
+        run: |
+          echo "CSC_LINK=${{ secrets.MAC_CERT_P12_BASE64 }}" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=${{ secrets.MAC_CERT_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> "$GITHUB_ENV"
+          echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> "$GITHUB_ENV"
+      - name: Build unsigned (no Apple certificate yet)
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT != 'true'
+        shell: bash
+        run: echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+      - name: Build and publish
+        shell: bash
+        run: npx electron-builder --publish always || { echo "::warning::Build/upload failed, retrying once in 30 s"; sleep 30; npx electron-builder --publish always; }
+
+  # ---------- phones ----------
+  # Android: the same web app in a Capacitor shell. Signed release APK + AAB (for Google Play) when the
+  # ANDROID_KEYSTORE_* secrets exist, otherwise a debug-signed APK anyone can sideload. Attached to the GitHub Release.
+  android:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci --ignore-scripts
+      - run: node tools/build-web.js
+      - run: npx cap add android
+      - run: npx --yes @capacitor/assets@3 generate --android --iconBackgroundColor '#05070C' --splashBackgroundColor '#05070C' --iconBackgroundColorDark '#05070C' --splashBackgroundColorDark '#05070C' || echo "::warning::icon generation skipped"
+      - run: npx cap sync android
+      - name: Version code and name from package.json
+        shell: bash
+        run: |
+          V=$(node -p "require('./package.json').version"); IFS=. read MA MI PA <<< "$V"; CODE=$((MA*10000+MI*100+PA))
+          sed -i "s/versionCode [0-9]*/versionCode $CODE/; s/versionName \"[^\"]*\"/versionName \"$V\"/" android/app/build.gradle
+          echo "V=$V" >> "$GITHUB_ENV"
+      - name: Signing config (only with secrets)
+        if: env.HAS_KEY == 'true'
+        shell: bash
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          cat >> android/app/build.gradle <<'GRADLE'
+          android { signingConfigs { release { storeFile file("release.keystore"); storePassword System.getenv("KS_PASS"); keyAlias System.getenv("KS_ALIAS"); keyPassword System.getenv("KEY_PASS") } }
+                    buildTypes { release { signingConfig signingConfigs.release } } }
+          GRADLE
+      - name: Build
+        shell: bash
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          if [ "$HAS_KEY" = "true" ]; then
+            ./gradlew --no-daemon assembleRelease bundleRelease
+            cp app/build/outputs/apk/release/app-release.apk ../StarSource-$V-android.apk
+            cp app/build/outputs/bundle/release/app-release.aab ../StarSource-$V-android.aab
+          else
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk ../StarSource-$V-android-sideload.apk
+          fi
+      - name: Attach to the release
+        shell: bash
+        run: gh release upload "v$V" StarSource-$V-android*.* --clobber
+
+  # iOS: proves the Xcode project builds (simulator). Installing on iPhones needs an Apple Developer account and
+  # signing secrets; see CLAUDE.md → Platforms. Never blocks the desktop release.
+  ios:
+    needs: build
+    runs-on: macos-latest
+    continue-on-error: true
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: node tools/build-web.js
+      - run: npx cap add ios
+      - run: npx --yes @capacitor/assets@3 generate --ios --iconBackgroundColor '#05070C' --splashBackgroundColor '#05070C' || echo "::warning::icon generation skipped"
+      - run: npx cap sync ios
+      - name: Build for the simulator
+        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build | tail -20

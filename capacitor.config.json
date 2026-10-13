@@ -1,0 +1,8 @@
+{
+  "appId": "com.wolfiescoven.starsource",
+  "appName": "StarSource",
+  "webDir": "app",
+  "backgroundColor": "#05070C",
+  "android": { "backgroundColor": "#05070C" },
+  "ios": { "backgroundColor": "#05070C", "contentInset": "never" }
+}

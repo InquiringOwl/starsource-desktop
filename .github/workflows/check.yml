@@ -1,0 +1,27 @@
+# Runs on every push to main, every pull request, and before each release (see release.yml).
+# 1. build-web.js     - every script must parse
+# 2. astro.test.js    - the WASM Swiss Ephemeris must match native swetest to 1e-6°, plus time zones, dignities, aspects
+# 3. smoke.js         - headless Chromium drives every screen and chart option at three widths; any JS error fails
+name: Check
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: node tools/build-web.js
+      - run: node tests/astro.test.js
+      - name: Install Playwright only (skips downloading Electron)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/pw" --no-save playwright@1.56.0
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - run: node tools/smoke.js
+        env:
+          NODE_PATH: ${{ runner.temp }}/pw/node_modules

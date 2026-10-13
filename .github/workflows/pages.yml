@@ -1,0 +1,28 @@
+# Publishes the web app (app/) to GitHub Pages on every release tag: https://inquiringowl.github.io/starsource-desktop/
+# Phones and computers can open it in a browser and install it (Add to Home Screen / Install app). It works offline
+# and updates itself (service worker, web/pwa/). One-time: repo Settings → Pages → Source: GitHub Actions.
+name: Web app
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency: { group: pages, cancel-in-progress: true }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: '${{ steps.d.outputs.page_url }}' }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: node tools/build-web.js
+      - run: node tests/astro.test.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with: { path: app }
+      - id: d
+        uses: actions/deploy-pages@v4
